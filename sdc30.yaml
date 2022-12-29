@@ -1,0 +1,163 @@
+esphome:
+  name: co2
+
+esp8266:
+  board: d1_mini
+  restore_from_flash: False
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+  password: ""
+  id: native_api
+
+ota:
+  password: ""
+
+wifi:
+  ssid: !secret ssid
+  password: !secret password
+  fast_connect: True
+  id: local_wifi
+  manual_ip: 
+    static_ip: !secret static_ip
+    subnet: !secret subnet
+    gateway: !secret gateway
+    dns1: !secret dns1
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Co2 Fallback Hotspot"
+    password: "Jsy8H0le1adY"
+
+captive_portal:
+
+i2c:
+    id: i2c_bus
+
+sensor:
+  - platform: scd30
+    co2:
+      name: "Workshop CO2"
+      id: "co2"
+      accuracy_decimals: 0
+      on_value_range:
+        - below: 1000
+          then:
+            - light.turn_on:
+                id: co2_led
+                green: 50%
+                red: 0
+                blue: 0
+        - below: 2000
+          above: 1000
+          then:
+            - light.turn_on:
+                id: co2_led
+                green: 50%
+                red: 100%
+                blue: 0%
+                effect: "Slow pulse"
+        - above: 2000
+          then:
+            - light.turn_on:
+                id: co2_led
+                green: 0
+                red: 100%
+                blue: 0
+                effect: "Fast pulse"
+    temperature:
+      name: "Workshop Temperature"
+      id: "temp"
+      accuracy_decimals: 2
+    humidity:
+      name: "Workshop Humidity"
+      id: "humid"
+      accuracy_decimals: 2
+    temperature_offset: 1.5 °C
+    address: 0x61
+    update_interval: 10s
+    altitude_compensation: "650m"
+
+font:
+  - file: "gfonts://Roboto"
+    id: roboto
+    size: 10
+
+output:
+  - platform: esp8266_pwm
+    id: red_led
+    pin:
+      number: 16
+      # inverted: true
+  - platform: esp8266_pwm
+    id: green_led
+    max_power: 0.35
+    min_power: 0
+    pin:
+      number: 0
+      # inverted: true
+  - platform: esp8266_pwm
+    id: blue_led
+    pin:
+      number: 12
+      #inverted: true
+
+light:
+  - platform: rgb
+    name: "CO2 LED"
+    internal: True
+    id: co2_led
+    red: red_led
+    green: green_led
+    blue: blue_led
+    effects:
+      - pulse:
+          transition_length: 0.5s
+          update_interval: 0.5s
+          name: "Fast pulse"
+      - pulse:
+          transition_length: 2s
+          update_interval: 2s
+          name: "Slow pulse"
+  - platform: status_led
+    name: "Sensor state"
+    internal: true
+    pin: 
+      number: GPIO2
+      inverted: True
+
+image:
+  - id: wifi_ok
+    file: "wifi.bmp"
+    type: binary
+  - id: no_wifi
+    file: "no-wifi.bmp"
+    type: binary
+  - id: casi_wifi
+    file: "casi-wifi.bmp"
+    type: binary
+
+display:
+  - platform: ssd1306_i2c
+    model: SSD1306_64X48
+    reset_pin: D0
+    address: 0x3C
+    lambda: |-
+      it.printf(0, 0, id(roboto), "CO2: %.0f", id(co2).state);
+      it.printf(0, 11, id(roboto), "Temp: %.2f", id(temp).state);
+      it.printf(0, 22, id(roboto), "CO2: %.2f", id(humid).state);
+      if (id(native_api).is_connected()){
+        it.image(10, 33, id(wifi_ok));
+      } else if (id(local_wifi).is_connected()) {
+        it.image(10, 33, id(casi_wifi));
+      } else {
+        it.image(10, 33, id(no_wifi));
+      }
+
+web_server:
+  port: 80
+
+  
